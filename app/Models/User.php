@@ -6,9 +6,13 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Order\Order;
+use App\Models\CustomerOrder\CustomerOrder;
 
 class User extends Authenticatable
 {
@@ -56,5 +60,28 @@ class User extends Authenticatable
             'status' => 'integer',
             'is_super_admin' => 'boolean',
         ];
+    }
+
+    /**
+     * Get all customer orders for this user.
+     */
+    public function customerOrders(): HasMany
+    {
+        return $this->hasMany(CustomerOrder::class, 'user_id');
+    }
+
+    /**
+     * Get all orders for this user through CustomerOrder.
+     */
+    public function orders(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Order::class,
+            CustomerOrder::class,
+            'user_id',  // Foreign key on customer_orders table
+            'id',        // Foreign key on orders table
+            'id',        // Local key on users table
+            'order_id'   // Local key on customer_orders table
+        );
     }
 }
