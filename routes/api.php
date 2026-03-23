@@ -5,6 +5,15 @@ use App\Http\Controllers\Api\User\UserController;
 use App\Http\Controllers\Api\Order\OrderController;
 use Illuminate\Support\Facades\Route;
 
+// Test CORS endpoint
+Route::get('/test-cors', function () {
+    return response()->json([
+        'message' => 'CORS is working!',
+        'origin' => request()->header('Origin'),
+        'time' => now()->toDateTimeString(),
+    ]);
+});
+
 Route::prefix('admin')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
@@ -25,15 +34,20 @@ Route::prefix('admin')->group(function () {
             Route::delete('/{id}', [UserController::class, 'destroy']);
         });
     });
-    Route::prefix('orders')->middleware('auth:sanctum')->group(function () {
-        Route::get('/my-orders', [OrderController::class, 'myOrders']);
-        Route::post('/', [OrderController::class, 'store']);
+    Route::prefix('orders')->group(function () {
+        // Public routes - no auth needed
+        Route::get('/{id}', [OrderController::class, 'show']);
 
-        Route::middleware('super_admin')->group(function () {
-            Route::get('/', [OrderController::class, 'index']);
-            Route::get('/{id}', [OrderController::class, 'show']);
-            Route::put('/{id}', [OrderController::class, 'update']);
-            Route::delete('/{id}', [OrderController::class, 'destroy']);
+        // Authenticated routes
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/my-orders', [OrderController::class, 'myOrders']);
+            Route::post('/', [OrderController::class, 'store']);
+
+            Route::middleware('super_admin')->group(function () {
+                Route::get('/', [OrderController::class, 'index']);
+                Route::put('/{id}', [OrderController::class, 'update']);
+                Route::delete('/{id}', [OrderController::class, 'destroy']);
+            });
         });
     });
 });
