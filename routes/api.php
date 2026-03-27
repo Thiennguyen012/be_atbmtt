@@ -35,9 +35,6 @@ Route::prefix('admin')->group(function () {
         });
     });
     Route::prefix('orders')->group(function () {
-        // Public routes - no auth needed
-        Route::get('/{id}', [OrderController::class, 'show']);
-
         // Authenticated routes
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/my-orders', [OrderController::class, 'myOrders']);
@@ -49,5 +46,8 @@ Route::prefix('admin')->group(function () {
                 Route::delete('/{id}', [OrderController::class, 'destroy']);
             });
         });
+
+        // Public routes - no auth needed
+        Route::get('/{id}', [OrderController::class, 'show'])->whereNumber('id');
     });
 });
