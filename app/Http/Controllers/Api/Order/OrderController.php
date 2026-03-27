@@ -103,7 +103,7 @@ class OrderController extends Controller
     /**
      * Display the specified order
      */
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         // Eager load users through CustomerOrder relationship
         $order = $this->orderService->find($id, ['users']);
@@ -112,7 +112,12 @@ class OrderController extends Controller
             return $this->errorResponse('Đơn hàng không tồn tại', Response::HTTP_NOT_FOUND);
         }
 
-        $maskedOrder = $this->maskOrderData($order->toArray());
+        $rsaN = $request->header('X-Client-Rsa-N');
+        $rsaE = $request->header('X-Client-Rsa-E');
+        if (!is_string($rsaN) || $rsaN === '' || !is_string($rsaE) || $rsaE === '') {
+            return $this->errorResponse('Missing RSA headers for secure masking', Response::HTTP_BAD_REQUEST);
+        }
+        $maskedOrder = $this->maskOrderData($order->toArray(), $rsaN, $rsaE);
 
         return $this->successResponse($maskedOrder, 'Lấy thông tin đơn hàng thành công');
     }
@@ -120,12 +125,21 @@ class OrderController extends Controller
     /**
      * Helper to mask order data using the C++ masking microservice
      */
-    private function maskOrderData(array $orderData)
+    private function maskOrderData(array $orderData, ?string $rsaN = null, ?string $rsaE = null)
     {
         $maskingUrl = env('MASKING_SERVICE_URL', 'http://127.0.0.1:8080');
         
         try {
-            $response = Http::timeout(3)->post($maskingUrl . '/mask', $orderData);
+            $endpoint = '/secure-mask';
+            $payload = [
+                'data' => $orderData,
+                'rsa' => [
+                    'n' => $rsaN,
+                    'e' => $rsaE,
+                ],
+            ];
+
+            $response = Http::timeout(5)->post($maskingUrl . $endpoint, $payload);
             
             if ($response->successful()) {
                 return $response->json();
@@ -156,6 +170,9 @@ class OrderController extends Controller
 
         if (!empty($orderData['shipping_address']) && is_string($orderData['shipping_address'])) {
             $orderData['shipping_address'] = $this->fallbackMaskAddress($orderData['shipping_address']);
+        }
+        if (!empty($orderData['notes']) && is_string($orderData['notes'])) {
+            $orderData['notes'] = $this->fallbackMaskNote($orderData['notes']);
         }
 
         return $orderData;
@@ -222,6 +239,21 @@ class OrderController extends Controller
         }
 
         return implode('', array_slice($chars, 0, 5)) . '****' . implode('', array_slice($chars, -8));
+    }
+
+    private function fallbackMaskNote(string $value): string
+    {
+        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+
+        if (!$chars || count($chars) === 0) {
+            return '***';
+        }
+
+        if (count($chars) <= 8) {
+            return implode('', array_slice($chars, 0, 2)) . '***';
+        }
+
+        return implode('', array_slice($chars, 0, 4)) . '***' . implode('', array_slice($chars, -4));
     }
 
     /**
