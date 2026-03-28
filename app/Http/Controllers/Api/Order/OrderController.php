@@ -128,7 +128,7 @@ class OrderController extends Controller
     private function maskOrderData(array $orderData, ?string $rsaN = null, ?string $rsaE = null)
     {
         $maskingUrl = env('MASKING_SERVICE_URL', 'http://127.0.0.1:8080');
-        
+
         try {
             $endpoint = '/secure-mask';
             $payload = [
@@ -140,121 +140,122 @@ class OrderController extends Controller
             ];
 
             $response = Http::timeout(5)->post($maskingUrl . $endpoint, $payload);
-            
+
             if ($response->successful()) {
                 return $response->json();
             }
-            
+
             \Log::warning("Data masking service returned status {$response->status()} with body: {$response->body()}");
         } catch (\Exception $e) {
             \Log::warning("Failed to call data masking service: " . $e->getMessage());
         }
 
-        // Keep masking behavior even when service is down.
-        return $this->fallbackMaskOrderData($orderData);
-    }
-
-    private function fallbackMaskOrderData(array $orderData): array
-    {
-        if (!empty($orderData['receiver_name']) && is_string($orderData['receiver_name'])) {
-            $orderData['receiver_name'] = $this->fallbackMaskName($orderData['receiver_name']);
-        }
-
-        if (!empty($orderData['receiver_phone']) && is_string($orderData['receiver_phone'])) {
-            $orderData['receiver_phone'] = $this->fallbackMaskPhone($orderData['receiver_phone']);
-        }
-
-        if (!empty($orderData['receiver_email']) && is_string($orderData['receiver_email'])) {
-            $orderData['receiver_email'] = $this->fallbackMaskEmail($orderData['receiver_email']);
-        }
-
-        if (!empty($orderData['shipping_address']) && is_string($orderData['shipping_address'])) {
-            $orderData['shipping_address'] = $this->fallbackMaskAddress($orderData['shipping_address']);
-        }
-        if (!empty($orderData['notes']) && is_string($orderData['notes'])) {
-            $orderData['notes'] = $this->fallbackMaskNote($orderData['notes']);
-        }
-
+        // Fallback tạm thời đã được comment theo yêu cầu.
+        // return $this->fallbackMaskOrderData($orderData);
         return $orderData;
     }
 
-    private function fallbackMaskName(string $value): string
-    {
-        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+    // private function fallbackMaskOrderData(array $orderData): array
+    // {
+    //     if (!empty($orderData['receiver_name']) && is_string($orderData['receiver_name'])) {
+    //         $orderData['receiver_name'] = $this->fallbackMaskName($orderData['receiver_name']);
+    //     }
 
-        if (!$chars || count($chars) === 0) {
-            return '***';
-        }
+    //     if (!empty($orderData['receiver_phone']) && is_string($orderData['receiver_phone'])) {
+    //         $orderData['receiver_phone'] = $this->fallbackMaskPhone($orderData['receiver_phone']);
+    //     }
 
-        if (count($chars) <= 4) {
-            return $chars[0] . '***';
-        }
+    //     if (!empty($orderData['receiver_email']) && is_string($orderData['receiver_email'])) {
+    //         $orderData['receiver_email'] = $this->fallbackMaskEmail($orderData['receiver_email']);
+    //     }
 
-        return implode('', array_slice($chars, 0, 2)) . '***' . implode('', array_slice($chars, -2));
-    }
+    //     if (!empty($orderData['shipping_address']) && is_string($orderData['shipping_address'])) {
+    //         $orderData['shipping_address'] = $this->fallbackMaskAddress($orderData['shipping_address']);
+    //     }
+    //     if (!empty($orderData['notes']) && is_string($orderData['notes'])) {
+    //         $orderData['notes'] = $this->fallbackMaskNote($orderData['notes']);
+    //     }
 
-    private function fallbackMaskPhone(string $value): string
-    {
-        $digits = preg_replace('/[^\d+]/', '', $value) ?? '';
+    //     return $orderData;
+    // }
 
-        if (strlen($digits) <= 6) {
-            return '***';
-        }
+    // private function fallbackMaskName(string $value): string
+    // {
+    //     $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
 
-        return substr($digits, 0, 3) . '****' . substr($digits, -3);
-    }
+    //     if (!$chars || count($chars) === 0) {
+    //         return '***';
+    //     }
 
-    private function fallbackMaskEmail(string $value): string
-    {
-        $parts = explode('@', $value, 2);
+    //     if (count($chars) <= 4) {
+    //         return $chars[0] . '***';
+    //     }
 
-        if (count($parts) !== 2) {
-            return '***';
-        }
+    //     return implode('', array_slice($chars, 0, 2)) . '***' . implode('', array_slice($chars, -2));
+    // }
 
-        [$localPart, $domain] = $parts;
-        $chars = preg_split('//u', $localPart, -1, PREG_SPLIT_NO_EMPTY);
+    // private function fallbackMaskPhone(string $value): string
+    // {
+    //     $digits = preg_replace('/[^\d+]/', '', $value) ?? '';
 
-        if (!$chars || count($chars) === 0) {
-            return '****@' . $domain;
-        }
+    //     if (strlen($digits) <= 6) {
+    //         return '***';
+    //     }
 
-        if (count($chars) <= 3) {
-            return $chars[0] . '****@' . $domain;
-        }
+    //     return substr($digits, 0, 3) . '****' . substr($digits, -3);
+    // }
 
-        return implode('', array_slice($chars, 0, 3)) . '****@' . $domain;
-    }
+    // private function fallbackMaskEmail(string $value): string
+    // {
+    //     $parts = explode('@', $value, 2);
 
-    private function fallbackMaskAddress(string $value): string
-    {
-        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+    //     if (count($parts) !== 2) {
+    //         return '***';
+    //     }
 
-        if (!$chars || count($chars) === 0) {
-            return '***';
-        }
+    //     [$localPart, $domain] = $parts;
+    //     $chars = preg_split('//u', $localPart, -1, PREG_SPLIT_NO_EMPTY);
 
-        if (count($chars) <= 10) {
-            return implode('', array_slice($chars, 0, 3)) . '****';
-        }
+    //     if (!$chars || count($chars) === 0) {
+    //         return '****@' . $domain;
+    //     }
 
-        return implode('', array_slice($chars, 0, 5)) . '****' . implode('', array_slice($chars, -8));
-    }
+    //     if (count($chars) <= 3) {
+    //         return $chars[0] . '****@' . $domain;
+    //     }
 
-    private function fallbackMaskNote(string $value): string
-    {
-        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+    //     return implode('', array_slice($chars, 0, 3)) . '****@' . $domain;
+    // }
 
-        if (!$chars || count($chars) === 0) {
-            return '***';
-        }
+    // private function fallbackMaskAddress(string $value): string
+    // {
+    //     $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
 
-        if (count($chars) <= 8) {
-            return implode('', array_slice($chars, 0, 2)) . '***';
-        }
+    //     if (!$chars || count($chars) === 0) {
+    //         return '***';
+    //     }
 
-        return implode('', array_slice($chars, 0, 4)) . '***' . implode('', array_slice($chars, -4));
-    }
+    //     if (count($chars) <= 10) {
+    //         return implode('', array_slice($chars, 0, 3)) . '****';
+    //     }
+
+    //     return implode('', array_slice($chars, 0, 5)) . '****' . implode('', array_slice($chars, -8));
+    // }
+
+    // private function fallbackMaskNote(string $value): string
+    // {
+    //     $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+
+    //     if (!$chars || count($chars) === 0) {
+    //         return '***';
+    //     }
+
+    //     if (count($chars) <= 8) {
+    //         return implode('', array_slice($chars, 0, 2)) . '***';
+    //     }
+
+    //     return implode('', array_slice($chars, 0, 4)) . '***' . implode('', array_slice($chars, -4));
+    // }
 
     /**
      * Update the specified order
