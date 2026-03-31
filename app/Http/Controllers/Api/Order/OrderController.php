@@ -5,22 +5,24 @@ namespace App\Http\Controllers\Api\Order;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\StoreOrderRequest;
 use App\Http\Requests\Order\UpdateOrderRequest;
+use App\Http\Requests\Order\UpdateOrderStatusRequest;
 use App\Services\Order\OrderService;
 use App\Traits\ValidatesRequestData;
 use App\CPU\Helpers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
-use App\Models\CustomerOrder\CustomerOrder;
 
 class OrderController extends Controller
 {
     use ValidatesRequestData;
     protected $orderService;
+    protected $customerOrderRepository;
 
-    public function __construct(OrderService $orderService)
+    public function __construct(OrderService $orderService, \App\Repositories\CustomerOrder\CustomerOrderInterface $customerOrderRepository)
     {
         $this->orderService = $orderService;
+        $this->customerOrderRepository = $customerOrderRepository;
     }
 
     /**
@@ -75,10 +77,12 @@ class OrderController extends Controller
             $limit = $request->query('limit', Helpers::LIMIT_PER_PAGE);
             $search = $request->query('search', '');
 
-            // Get order IDs where user is owner
-            $orderIds = CustomerOrder::where('user_id', $userId)
-                ->pluck('order_id')
-                ->toArray();
+            // Get order IDs where user is owner using repository
+            $customerOrders = $this->customerOrderRepository->get([
+                'user_id' => $userId
+            ]);
+            
+            $orderIds = $customerOrders->pluck('order_id')->toArray();
 
             // Build query
             $query = \App\Models\Order\Order::whereIn('id', $orderIds)
@@ -259,14 +263,34 @@ class OrderController extends Controller
 
     /**
      * Update the specified order
+     * User can only update their own orders, Super Admin can update any order
      */
     public function update(UpdateOrderRequest $request, string $id)
     {
         try {
+            $userId = auth('sanctum')->id();
+            $user = auth('sanctum')->user();
+
+            if (!$userId || !$user) {
+                return $this->errorResponse('Bạn chưa xác thực', Response::HTTP_UNAUTHORIZED);
+            }
+
             $order = $this->orderService->find($id);
 
             if (!$order) {
                 return $this->errorResponse('Đơn hàng không tồn tại', Response::HTTP_NOT_FOUND);
+            }
+
+            // Check if user owns this order (unless they are super admin)
+            if (!$user->is_super_admin) {
+                $customerOrder = $this->customerOrderRepository->first([
+                    'order_id' => $id,
+                    'user_id' => $userId
+                ]);
+
+                if (!$customerOrder) {
+                    return $this->errorResponse('Bạn không có quyền sửa đơn hàng này', Response::HTTP_FORBIDDEN);
+                }
             }
 
             $updatedOrder = $this->orderService->update($order, $request->validated());
@@ -294,6 +318,26 @@ class OrderController extends Controller
             return $this->successResponse(null, 'Xóa đơn hàng thành công');
         } catch (\Exception $e) {
             return $this->handleException($e, 'Lỗi khi xóa đơn hàng');
+        }
+    }
+
+    /**
+     * Update order status (Super Admin only)
+     */
+    public function updateStatus(UpdateOrderStatusRequest $request, string $id)
+    {
+        try {
+            $order = $this->orderService->find($id);
+
+            if (!$order) {
+                return $this->errorResponse('Đơn hàng không tồn tại', Response::HTTP_NOT_FOUND);
+            }
+
+            $updatedOrder = $this->orderService->update($order, $request->validated());
+
+            return $this->successResponse($updatedOrder, 'Cập nhật trạng thái đơn hàng thành công');
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Lỗi khi cập nhật trạng thái đơn hàng');
         }
     }
 }
