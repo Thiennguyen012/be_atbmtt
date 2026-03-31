@@ -36,6 +36,8 @@ Route::prefix('admin')->group(function () {
     });
     
     Route::prefix('orders')->group(function () {
+        Route::post('/decrypt', [OrderController::class, 'decryptPayload']);
+
         // Authenticated routes
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/my-orders', [OrderController::class, 'myOrders']);

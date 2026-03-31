@@ -107,13 +107,12 @@ class OrderController extends Controller
     /**
      * Display the specified order
      */
-    public function show(Request $request, string $id)
+        public function show(Request $request, string $id)
     {
-        // Eager load users through CustomerOrder relationship
         $order = $this->orderService->find($id, ['users']);
 
         if (!$order) {
-            return $this->errorResponse('Đơn hàng không tồn tại', Response::HTTP_NOT_FOUND);
+            return $this->errorResponse('Don hang khong ton tai', Response::HTTP_NOT_FOUND);
         }
 
         $rsaN = $request->header('X-Client-Rsa-N');
@@ -121,9 +120,35 @@ class OrderController extends Controller
         if (!is_string($rsaN) || $rsaN === '' || !is_string($rsaE) || $rsaE === '') {
             return $this->errorResponse('Missing RSA headers for secure masking', Response::HTTP_BAD_REQUEST);
         }
-        $maskedOrder = $this->maskOrderData($order->toArray(), $rsaN, $rsaE);
 
-        return $this->successResponse($maskedOrder, 'Lấy thông tin đơn hàng thành công');
+        $encryptedOrder = $this->maskOrderData($order->toArray(), $rsaN, $rsaE);
+        return $this->successResponse($encryptedOrder, 'Lay thong tin don hang thanh cong');
+    }
+
+    public function decryptPayload(Request $request)
+    {
+        $payload = $request->validate([
+            'encrypted_data' => 'required|array',
+            'rsa' => 'required|array',
+            'rsa.n' => 'required',
+            'rsa.d' => 'required',
+        ]);
+
+        $maskingUrl = env('MASKING_SERVICE_URL', 'http://127.0.0.1:8080');
+
+        try {
+            $response = Http::timeout(5)->post($maskingUrl . '/decrypt', $payload);
+            if ($response->successful()) {
+                return $this->successResponse($response->json(), 'Giai ma du lieu thanh cong');
+            }
+
+            return $this->errorResponse('Giai ma that bai: ' . $response->body(), $response->status());
+        } catch (\Exception $e) {
+            return $this->errorResponse(
+                'Khong the ket noi toi decrypt service: ' . $e->getMessage(),
+                Response::HTTP_BAD_GATEWAY
+            );
+        }
     }
 
     /**
@@ -195,12 +220,12 @@ class OrderController extends Controller
     //         return $chars[0] . '***';
     //     }
 
-    //     return implode('', array_slice($chars, 0, 2)) . '***' . implode('', array_slice($chars, -2));
+    //     return implode(', array_slice($chars, 0, 2)) . '***' . implode(', array_slice($chars, -2));
     // }
 
     // private function fallbackMaskPhone(string $value): string
     // {
-    //     $digits = preg_replace('/[^\d+]/', '', $value) ?? '';
+    //     $digits = preg_replace('/[^\d+]/', ', $value) ?? ';
 
     //     if (strlen($digits) <= 6) {
     //         return '***';
@@ -228,7 +253,7 @@ class OrderController extends Controller
     //         return $chars[0] . '****@' . $domain;
     //     }
 
-    //     return implode('', array_slice($chars, 0, 3)) . '****@' . $domain;
+    //     return implode(', array_slice($chars, 0, 3)) . '****@' . $domain;
     // }
 
     // private function fallbackMaskAddress(string $value): string
@@ -240,10 +265,10 @@ class OrderController extends Controller
     //     }
 
     //     if (count($chars) <= 10) {
-    //         return implode('', array_slice($chars, 0, 3)) . '****';
+    //         return implode(', array_slice($chars, 0, 3)) . '****';
     //     }
 
-    //     return implode('', array_slice($chars, 0, 5)) . '****' . implode('', array_slice($chars, -8));
+    //     return implode(', array_slice($chars, 0, 5)) . '****' . implode(', array_slice($chars, -8));
     // }
 
     // private function fallbackMaskNote(string $value): string
@@ -255,10 +280,10 @@ class OrderController extends Controller
     //     }
 
     //     if (count($chars) <= 8) {
-    //         return implode('', array_slice($chars, 0, 2)) . '***';
+    //         return implode(', array_slice($chars, 0, 2)) . '***';
     //     }
 
-    //     return implode('', array_slice($chars, 0, 4)) . '***' . implode('', array_slice($chars, -4));
+    //     return implode(', array_slice($chars, 0, 4)) . '***' . implode(', array_slice($chars, -4));
     // }
 
     /**
@@ -341,3 +366,5 @@ class OrderController extends Controller
         }
     }
 }
+
+
