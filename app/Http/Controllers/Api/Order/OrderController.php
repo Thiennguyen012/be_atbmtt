@@ -46,6 +46,11 @@ class OrderController extends Controller
         try {
             $validatedData = $request->validated();
 
+            // Set default status if not provided
+            if (!isset($validatedData['status'])) {
+                $validatedData['status'] = 'pending';
+            }
+
             // Get authenticated user's id
             $userId = auth('sanctum')->id();
 

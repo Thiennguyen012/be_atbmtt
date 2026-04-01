@@ -24,7 +24,7 @@ class StoreOrderRequest extends FormRequest
         return [
             'order_name' => 'required|string|max:255',
             'shipping_address' => 'required|string',
-            'status' => 'required|string|in:pending,processing,shipped,in_transit,delivered,cancelled',
+    'status' => 'nullable|string|in:pending,processing,shipped,in_transit,delivered,cancelled',
             'total_amount' => 'required|numeric|min:0',
             'notes' => 'nullable|string',
             'shipping_date' => 'nullable|date',
